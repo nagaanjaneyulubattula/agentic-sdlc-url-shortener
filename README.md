@@ -16,43 +16,80 @@ An agentic software-engineering system built on **.NET 8 + Angular 18**. It turn
 | Final engineering summary | generated per run: `runs/<id>/ENGINEERING_SUMMARY.md` |
 | Three scenarios (greenfield / brownfield / ambiguous) | `scenarios/*.json`, [docs/SCENARIOS.md](docs/SCENARIOS.md) |
 
-## Quick start
+## Run it and test it fully (step by step)
 
-Prerequisites: **.NET SDK 8+** (developed on SDK 10, targets `net8.0`). Node.js is only needed to rebuild the Angular UI – the built UI is committed under `src/Agentic.Api/wwwroot`.
+### 0. Prerequisites
+| Need | Version | Notes |
+|---|---|---|
+| **.NET SDK** | 8.0 or newer | `dotnet --version`. Targets `net8.0` (developed on SDK 10). |
+| Internet (first run only) | – | NuGet restore of xUnit / test packages. |
+| Node.js | 18.19+ / 20 / 22 | **Optional** – only to rebuild or hot-reload the Angular UI. The built UI is already committed in `src/Agentic.Api/wwwroot`, so you do **not** need `npm install` to run the console. |
 
+Works on Windows, macOS and Linux. Ports used: **5080** (console + control API) and **5000** (URL shortener) – change with `--urls`.
+
+### 1. Get the code (never share `node_modules`)
 ```bash
-# 1. everything (product tests + engine/agent tests + end-to-end scenario tests that build and test generated workspaces)
-dotnet test AgenticSdlc.sln
+git clone <repo-url> && cd agentic-sdlc-url-shortener
+```
+`node_modules/`, `bin/`, `obj/` and `runs/` are git-ignored and are not in the repository. If you share a zip instead of a git link, create it from git so those folders are left out: `git archive --format=zip -o agentic-sdlc.zip HEAD`.
 
-# fast loop (skips the ~minutes-long end-to-end scenarios)
-dotnet test AgenticSdlc.sln --filter "Category!=E2E"
+### 2. Run the complete test suite (≈ 1–2 min, 501 tests)
+```bash
+dotnet test AgenticSdlc.sln
+```
+Expected: `UrlShortener.Tests` **322 passed**, `Agentic.Tests` **179 passed**, 0 failed. This includes **4 end-to-end tests** that run the real agents on the greenfield / brownfield / ambiguous / chaos scenarios and execute a real `dotnet build` + `dotnet test` on the generated code (first run is slower while packages restore).
+
+Handy subsets:
+```bash
+dotnet test AgenticSdlc.sln --filter "Category!=E2E"                 # fast loop (~10 s), skips the 4 end-to-end tests
+dotnet test tests/UrlShortener.Tests                                 # product only (322)
+dotnet test tests/Agentic.Tests --filter "Category=E2E"              # only the 4 end-to-end scenario tests
 ```
 
+### 3. Run the console and try the scenarios (human-in-the-loop)
 ```bash
-# 2. open the console (live DAG, approvals, metrics, audit, lineage, summary) at http://localhost:5080
 dotnet run --project src/Agentic.Api
 ```
-Pick a scenario, leave **Auto-approve** off to act as the human: approve/reject the checkpoints, answer clarification questions, press **Stop** (safe-stop) / **Resume**.
+Open **http://localhost:5080**. Pick a scenario, leave **Auto-approve** *off* to act as the human – answer the clarification questions, approve / reject each gate, press **Stop** (safe-stop) and **Resume** – and watch the dependency graph, metrics, audit trail (with hash-chain check), decision lineage and the final engineering summary. Turn **Auto-approve** on to let a scripted approver run it unattended.
 
+### 4. Or run a scenario headless in the terminal
 ```bash
-# 3. headless run in the terminal (scripted approver by default, --manual to be asked on the console)
-dotnet run --project src/Agentic.Api -- run greenfield
-dotnet run --project src/Agentic.Api -- run brownfield
-dotnet run --project src/Agentic.Api -- run ambiguous
-dotnet run --project src/Agentic.Api -- run chaos-safe-stop      # extra: critical policy violation → safe-stop
+dotnet run --project src/Agentic.Api -- run greenfield         # clear requirement, empty repo (injected faults → retry + rollback)
+dotnet run --project src/Agentic.Api -- run brownfield         # existing v1 code with hidden defects → reproduce, impact, change-controlled fix
+dotnet run --project src/Agentic.Api -- run ambiguous          # vague request → clarification + mid-run change → minimal re-plan
+dotnet run --project src/Agentic.Api -- run chaos-safe-stop    # extra: secret leak → critical policy → safe-stop
+dotnet run --project src/Agentic.Api -- run ambiguous --manual # be asked for every approval on the console
 ```
-Each run writes to `runs/<runId>/`: `workspace/` (the generated or modified .NET solution – `dotnet test workspace/tests/UrlShortener.Tests` works on it), `audit.jsonl`, `state.json`, `metrics.json`, `artifacts/`, `ENGINEERING_SUMMARY.md`.
+Each run prints the live audit stream and a result line (status, release decision, metrics) and writes `runs/<runId>/`: the generated `workspace/` (a real .NET solution – `dotnet test runs/<runId>/workspace/tests/UrlShortener.Tests` works), `audit.jsonl`, `state.json`, `metrics.json`, `artifacts/` and `ENGINEERING_SUMMARY.md`. Exit code is `0` when the run completes.
 
+### 5. Run the URL shortener itself
 ```bash
-# 4. the product itself (the full URL shortener)
 dotnet run --project src/UrlShortener.Api --urls http://localhost:5000
-curl -s -X POST localhost:5000/api/links -H 'Content-Type: application/json' \
+curl -s -X POST localhost:5000/api/links -H "Content-Type: application/json" \
      -d '{"url":"https://example.com/docs","alias":"docs","ttlSeconds":3600}'
-curl -i localhost:5000/docs
-curl -s localhost:5000/api/links/docs/stats
+curl -i localhost:5000/docs                 # 302 → https://example.com/docs
+curl -s localhost:5000/api/links/docs/stats # clicks, unique visitors, per-day, referrers
+curl -s localhost:5000/healthz ; curl -s localhost:5000/metrics
+```
+Unsafe URLs (`javascript:`, `file:`, internal/metadata hosts) are rejected with `400`.
+
+### 6. Optional – Angular UI development (the only step that needs Node)
+```bash
+cd web/agentic-console
+npm install            # creates node_modules/ locally (git-ignored)
+npm start              # dev server on http://localhost:4200, proxies /api → :5080 (start Agentic.Api first)
+npm run mock           # alternative: stand-alone mock backend on :5080 for UI work
+npm run build          # rebuilds the production UI into src/Agentic.Api/wwwroot
 ```
 
-Rebuild the UI (optional): `cd web/agentic-console && npm install && npm run build` (outputs into `src/Agentic.Api/wwwroot`); dev mode with proxy: `npm start` (+ `npm run mock` for a stand-alone mock backend).
+### Troubleshooting
+| Symptom | Fix |
+|---|---|
+| `address already in use` | another process holds 5080/5000 – stop it or pass `--urls http://localhost:<port>` (the Angular dev proxy expects 5080). |
+| First `dotnet test` is slow / restore errors | needs internet once for NuGet; re-run. |
+| `dotnet run` says file is locked after tests | stop running servers before `dotnet test` / rebuild (they lock the built DLLs). |
+| E2E test timeout on a slow machine | run it alone: `dotnet test tests/Agentic.Tests --filter "Category=E2E"`. |
+| Blank console page | rebuild the UI (`npm run build`) or use the dev server (step 6). |
 
 ## How it works in one page
 
