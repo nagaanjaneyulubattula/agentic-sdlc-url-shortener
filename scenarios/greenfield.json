@@ -1,0 +1,15 @@
+{
+  "id": "greenfield",
+  "title": "Greenfield: URL shortener with analytics and reliability",
+  "mode": "greenfield",
+  "description": "Well-defined requirement, empty repository. Agents decompose the requirement into feature slices, implement independent slices in parallel, join at integration, then verify (tests, traceability, security) and document in parallel. Faults are injected to demonstrate bounded retries, rollback and fallback.",
+  "requirementText": "Build a URL shortener service. Clients create short links through a REST API with optional custom aliases and an optional expiry (TTL). Every redirect must be tracked with total and unique clicks per day and the top referrers, without storing raw IP addresses. Protect link creation against abuse with rate limiting, make link creation safe to retry with idempotency keys, and expose health, readiness and metrics endpoints. Links can be inspected and deleted.",
+  "workspace": "empty",
+  "faults": [
+    { "node": "implement:analytics", "agent": "implementer", "attempts": [1], "mode": "throw" },
+    { "node": "implement:expiry", "agent": "implementer", "attempts": [1], "mode": "bad-output" }
+  ],
+  "events": [],
+  "approvals": {},
+  "answers": {}
+}

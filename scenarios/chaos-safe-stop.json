@@ -1,0 +1,14 @@
+{
+  "id": "chaos-safe-stop",
+  "title": "Chaos: critical policy violation triggers safe-stop (extra demo)",
+  "mode": "greenfield",
+  "description": "A fault makes the implementer leak a secret into generated code. The policy guardrail classifies it as critical: no retry, immediate rollback of the node and safe-stop of the whole run with state and audit trail preserved. Resume after the operator removes the cause.",
+  "requirementText": "Create short links with custom aliases and protect link creation with rate limiting.",
+  "workspace": "empty",
+  "faults": [
+    { "node": "implement:alias", "agent": "implementer", "attempts": [1], "mode": "critical-policy" }
+  ],
+  "events": [],
+  "approvals": {},
+  "answers": {}
+}

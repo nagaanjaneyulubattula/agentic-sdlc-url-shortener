@@ -1,0 +1,14 @@
+{
+  "id": "brownfield",
+  "title": "Brownfield: fix security defects and add expiry + analytics to the v1 service",
+  "mode": "brownfield",
+  "description": "An existing v1 codebase (seeded with defects the agents are NOT told about). The analyst scans the code, reproduces the defects with a failing test, maps the impact on existing modules, then applies a change-controlled patch plus two new slices. Modifying security-sensitive files needs human approval; a bad patch is rolled back and retried.",
+  "requirementText": "We run the URL shortener v1 in production. A security review found that it accepts javascript: and file: links and internal addresses, and that short codes are generated with Math.Random so they are predictable - fix these and block dangerous URL schemes. In addition, add link expiry (TTL) and click analytics with referrers. Existing links and APIs must keep working.",
+  "workspace": "baseline",
+  "faults": [
+    { "node": "implement:hardening", "agent": "implementer", "attempts": [1], "mode": "bad-output" }
+  ],
+  "events": [],
+  "approvals": {},
+  "answers": {}
+}

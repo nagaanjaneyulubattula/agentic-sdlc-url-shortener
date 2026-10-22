@@ -1,0 +1,744 @@
+{
+  "version": 1,
+  "description": "Feature catalog for the vetted component library. The library IS this repository: slices live in src/UrlShortener.Api/Features/<Slice> and tests/UrlShortener.Tests/Features/<Slice>. Paths are repo-relative and identical inside a generated workspace.",
+  "baseline": {
+    "description": "Brownfield seed: an older v1 of the service. Same as core except files under library/baseline/ (mirrored paths) override core files, excludeCoreFiles are absent, and only the listed features are installed.",
+    "overrideRoot": "library/baseline",
+    "excludeCoreFiles": [
+      "tests/UrlShortener.Tests/Core/HardeningTests.cs"
+    ],
+    "features": [
+      "shorten",
+      "redirect",
+      "manage"
+    ],
+    "seededDefects": [
+      {
+        "id": "DEF-1",
+        "file": "src/validate.js",
+        "cwe": "CWE-601/CWE-918",
+        "summary": "Accepts any URL scheme (javascript:, data:, file:) and private/loopback/metadata hosts and userinfo"
+      },
+      {
+        "id": "DEF-2",
+        "file": "src/codes.js",
+        "cwe": "CWE-338",
+        "summary": "Short codes generated with Math.random (predictable, enumerable)"
+      }
+    ]
+  },
+  "features": {
+    "shorten": {
+      "title": "Create short links",
+      "kind": "core",
+      "requires": [],
+      "order": 10,
+      "sensitive": false,
+      "keywords": [
+        "shorten",
+        "short link",
+        "short url",
+        "create (a )?link"
+      ],
+      "hooks": {
+        "provides": [
+          "resolveCode",
+          "onShorten",
+          "afterShorten"
+        ],
+        "uses": []
+      },
+      "routes": [
+        {
+          "method": "POST",
+          "path": "/api/links",
+          "summary": "Create a short link",
+          "request": {
+            "url": "string (required)"
+          },
+          "responses": {
+            "201": "Created",
+            "400": "Invalid request",
+            "413": "Body too large"
+          }
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "AC-SHORT-1",
+          "text": "POST /api/links with a valid http(s) URL returns 201 with code, shortUrl, url and createdAt."
+        },
+        {
+          "id": "AC-SHORT-2",
+          "text": "Invalid, non-http(s), or oversized URLs are rejected with 400 and a machine-readable error code."
+        },
+        {
+          "id": "AC-SHORT-3",
+          "text": "Generated codes are 7-character base62 and unique; collisions are retried."
+        },
+        {
+          "id": "AC-SHORT-4",
+          "text": "Malformed JSON returns 400 and bodies over 16KB return 413."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-COLLISION",
+          "scenario": "Random code collides with an existing code",
+          "likelihood": "low",
+          "impact": "medium",
+          "mitigation": "62^7 code space, bounded collision retry, store.create is atomic (fails on conflict)",
+          "validation": [
+            "AC-SHORT-3"
+          ]
+        },
+        {
+          "id": "R-BODY-DOS",
+          "scenario": "Oversized or malformed request bodies exhaust memory or crash the parser",
+          "likelihood": "medium",
+          "impact": "medium",
+          "mitigation": "16KB body cap, strict JSON parse with 400 mapping",
+          "validation": [
+            "AC-SHORT-4"
+          ]
+        }
+      ],
+      "slice": "Shorten"
+    },
+    "redirect": {
+      "title": "Redirect short links",
+      "kind": "core",
+      "requires": [
+        "shorten"
+      ],
+      "order": 20,
+      "sensitive": false,
+      "keywords": [
+        "redirect",
+        "resolve",
+        "follow (the )?link"
+      ],
+      "hooks": {
+        "provides": [
+          "beforeRedirect",
+          "afterRedirect"
+        ],
+        "uses": []
+      },
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/:code",
+          "summary": "Redirect to the original URL (302)",
+          "responses": {
+            "302": "Found",
+            "404": "Unknown code"
+          }
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "AC-REDIR-1",
+          "text": "GET /:code returns 302 with Location set to the original URL."
+        },
+        {
+          "id": "AC-REDIR-2",
+          "text": "An unknown code returns 404 with a JSON error body."
+        },
+        {
+          "id": "AC-REDIR-3",
+          "text": "A failing afterRedirect hook never breaks the redirect response."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-SIDE-EFFECT",
+          "scenario": "A side-effect hook (analytics) throws and breaks redirects",
+          "likelihood": "medium",
+          "impact": "high",
+          "mitigation": "afterRedirect hooks run isolated; errors are logged and swallowed",
+          "validation": [
+            "AC-REDIR-3"
+          ]
+        }
+      ],
+      "slice": "Redirect"
+    },
+    "hardening": {
+      "title": "Security hardening patch (URL validation + CSPRNG codes)",
+      "kind": "patch",
+      "requires": [],
+      "order": 1,
+      "sensitive": true,
+      "modifies": [
+        "src/UrlShortener.Api/Core/UrlValidator.cs",
+        "src/UrlShortener.Api/Core/CodeGenerator.cs"
+      ],
+      "keywords": [
+        "javascript:",
+        "scheme",
+        "ssrf",
+        "insecure",
+        "vulnerab",
+        "harden",
+        "predictable",
+        "random",
+        "security (review|finding|issue)",
+        "private (ip|address)",
+        "open redirect"
+      ],
+      "hooks": {
+        "provides": [],
+        "uses": []
+      },
+      "routes": [],
+      "acceptance": [
+        {
+          "id": "AC-HARD-1",
+          "text": "Only http and https URLs are accepted; javascript:, data:, file: and similar schemes are rejected."
+        },
+        {
+          "id": "AC-HARD-2",
+          "text": "URLs containing credentials, localhost, private, loopback, link-local or cloud-metadata hosts are rejected."
+        },
+        {
+          "id": "AC-HARD-3",
+          "text": "Short codes come from a CSPRNG (never Math.random)."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-OPEN-REDIRECT",
+          "scenario": "Shortener is abused as an open redirect / XSS / SSRF vector via dangerous schemes or internal hosts",
+          "likelihood": "high",
+          "impact": "high",
+          "mitigation": "Scheme allowlist, host denylist for private ranges, userinfo rejection",
+          "validation": [
+            "AC-HARD-1",
+            "AC-HARD-2"
+          ]
+        },
+        {
+          "id": "R-ENUMERATION",
+          "scenario": "Predictable codes let attackers enumerate other users' links",
+          "likelihood": "high",
+          "impact": "medium",
+          "mitigation": "crypto.randomInt-based generation",
+          "validation": [
+            "AC-HARD-3"
+          ]
+        }
+      ],
+      "patchFiles": [
+        "src/UrlShortener.Api/Core/UrlValidator.cs",
+        "src/UrlShortener.Api/Core/CodeGenerator.cs",
+        "tests/UrlShortener.Tests/Core/HardeningTests.cs"
+      ]
+    },
+    "manage": {
+      "title": "Inspect and delete links",
+      "kind": "feature",
+      "requires": [
+        "shorten",
+        "redirect"
+      ],
+      "order": 30,
+      "sensitive": false,
+      "keywords": [
+        "delete",
+        "disable",
+        "deactivate",
+        "revoke",
+        "manage",
+        "inspect",
+        "look ?up",
+        "metadata"
+      ],
+      "hooks": {
+        "provides": [],
+        "uses": []
+      },
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/links/:code",
+          "summary": "Get link metadata",
+          "responses": {
+            "200": "OK",
+            "404": "Unknown code"
+          }
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/links/:code",
+          "summary": "Delete a link",
+          "responses": {
+            "204": "Deleted",
+            "404": "Unknown code"
+          }
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "AC-MANAGE-1",
+          "text": "GET /api/links/:code returns link metadata (200) or 404 for an unknown code."
+        },
+        {
+          "id": "AC-MANAGE-2",
+          "text": "DELETE /api/links/:code returns 204 and subsequent redirects return 404."
+        },
+        {
+          "id": "AC-MANAGE-3",
+          "text": "DELETE of an unknown code returns 404."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-UNAUTH-DELETE",
+          "scenario": "Anyone can delete any link (no auth in prototype)",
+          "likelihood": "high",
+          "impact": "medium",
+          "mitigation": "Documented limitation: deployment must sit behind an authenticated gateway; admin-token feature is future work",
+          "validation": []
+        }
+      ],
+      "slice": "Manage"
+    },
+    "alias": {
+      "title": "Custom aliases",
+      "kind": "feature",
+      "requires": [
+        "shorten"
+      ],
+      "order": 40,
+      "sensitive": false,
+      "keywords": [
+        "custom (alias|slug|short ?code|code)",
+        "vanity",
+        "branded",
+        "memorable",
+        "alias"
+      ],
+      "hooks": {
+        "provides": [],
+        "uses": [
+          "resolveCode"
+        ]
+      },
+      "routes": [],
+      "requestFields": [
+        {
+          "route": "POST /api/links",
+          "field": "alias",
+          "type": "string [A-Za-z0-9_-]{3,32} (optional)"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "AC-ALIAS-1",
+          "text": "A custom alias matching [A-Za-z0-9_-]{3,32} is used as the short code."
+        },
+        {
+          "id": "AC-ALIAS-2",
+          "text": "A duplicate alias returns 409 with error code alias_taken."
+        },
+        {
+          "id": "AC-ALIAS-3",
+          "text": "Reserved words (api, healthz, readyz, metrics, admin) and invalid characters are rejected with 400."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-ALIAS-SQUAT",
+          "scenario": "Aliases shadow system routes or enable brand squatting / phishing look-alikes",
+          "likelihood": "medium",
+          "impact": "medium",
+          "mitigation": "Reserved-word list and strict character set; case-sensitive matching",
+          "validation": [
+            "AC-ALIAS-3"
+          ]
+        }
+      ],
+      "slice": "Alias"
+    },
+    "expiry": {
+      "title": "Link expiration (TTL)",
+      "kind": "feature",
+      "requires": [
+        "shorten",
+        "redirect"
+      ],
+      "order": 50,
+      "sensitive": false,
+      "keywords": [
+        "expire",
+        "expiry",
+        "expiration",
+        "ttl",
+        "time[- ]limited",
+        "temporary",
+        "valid for",
+        "campaign ends?"
+      ],
+      "hooks": {
+        "provides": [],
+        "uses": [
+          "onShorten",
+          "beforeRedirect"
+        ]
+      },
+      "routes": [],
+      "requestFields": [
+        {
+          "route": "POST /api/links",
+          "field": "ttlSeconds",
+          "type": "integer 1..31536000 (optional)"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "AC-EXP-1",
+          "text": "ttlSeconds (1..31536000) sets expiresAt on the created link."
+        },
+        {
+          "id": "AC-EXP-2",
+          "text": "Redirecting an expired link returns 410 with error code link_expired."
+        },
+        {
+          "id": "AC-EXP-3",
+          "text": "Invalid ttlSeconds (<=0, non-integer, >1 year) returns 400."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-CLOCK",
+          "scenario": "Clock skew or wall-clock jumps expire links early/late",
+          "likelihood": "low",
+          "impact": "low",
+          "mitigation": "All time comes from an injectable clock; tests are deterministic",
+          "validation": [
+            "AC-EXP-2"
+          ]
+        }
+      ],
+      "slice": "Expiry"
+    },
+    "analytics": {
+      "title": "Click analytics",
+      "kind": "feature",
+      "requires": [
+        "shorten",
+        "redirect"
+      ],
+      "order": 60,
+      "sensitive": true,
+      "sensitiveReason": "Processes visitor-derived data (privacy / compliance review)",
+      "keywords": [
+        "analytic",
+        "click",
+        "track",
+        "report",
+        "statistic",
+        "stats",
+        "visit",
+        "referrer",
+        "campaign",
+        "engagement"
+      ],
+      "hooks": {
+        "provides": [],
+        "uses": [
+          "afterRedirect"
+        ]
+      },
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/api/links/:code/stats",
+          "summary": "Click statistics for a link",
+          "responses": {
+            "200": "OK",
+            "404": "Unknown code"
+          }
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "AC-ANA-1",
+          "text": "Every successful redirect increments totalClicks for the link."
+        },
+        {
+          "id": "AC-ANA-2",
+          "text": "GET /api/links/:code/stats returns totalClicks, uniqueVisitors, clicksByDay and topReferrers; 404 for unknown code."
+        },
+        {
+          "id": "AC-ANA-3",
+          "text": "Raw IP addresses are never stored or returned; only a keyed hash is used for unique-visitor counting."
+        },
+        {
+          "id": "AC-ANA-4",
+          "text": "An analytics storage failure never breaks the redirect."
+        },
+        {
+          "id": "AC-ANA-5",
+          "text": "Per-link event storage is bounded (10,000 events) while totals stay accurate via counters."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-PII",
+          "scenario": "Visitor IPs persisted in analytics violate privacy policy",
+          "likelihood": "medium",
+          "impact": "high",
+          "mitigation": "Only HMAC-hashed client keys are stored; raw addresses only accessed in http.js",
+          "validation": [
+            "AC-ANA-3"
+          ]
+        },
+        {
+          "id": "R-ANALYTICS-MEM",
+          "scenario": "Unbounded click events exhaust memory under a hot link",
+          "likelihood": "medium",
+          "impact": "high",
+          "mitigation": "Event ring buffer capped at 10,000 per link; aggregate counters",
+          "validation": [
+            "AC-ANA-5"
+          ]
+        }
+      ],
+      "slice": "Analytics"
+    },
+    "ratelimit": {
+      "title": "Rate limiting on link creation",
+      "kind": "feature",
+      "requires": [
+        "shorten"
+      ],
+      "order": 5,
+      "sensitive": true,
+      "sensitiveReason": "Security control on the write path (change-control review)",
+      "keywords": [
+        "rate[- ]?limit",
+        "throttl",
+        "abuse",
+        "spam",
+        "flood",
+        "ddos",
+        "too many requests"
+      ],
+      "hooks": {
+        "provides": [],
+        "uses": [
+          "beforeRequest"
+        ]
+      },
+      "routes": [],
+      "acceptance": [
+        {
+          "id": "AC-RL-1",
+          "text": "Requests beyond the bucket capacity to POST /api/links return 429 with a Retry-After header."
+        },
+        {
+          "id": "AC-RL-2",
+          "text": "Tokens refill over time so a client can create links again after waiting."
+        },
+        {
+          "id": "AC-RL-3",
+          "text": "Limits are tracked per client and the tracking map is bounded; redirects are never rate limited."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-ABUSE",
+          "scenario": "Automated abuse floods link creation (spam/phishing campaigns)",
+          "likelihood": "high",
+          "impact": "high",
+          "mitigation": "Per-client token bucket on POST /api/links",
+          "validation": [
+            "AC-RL-1",
+            "AC-RL-2"
+          ]
+        },
+        {
+          "id": "R-LIMITER-MEM",
+          "scenario": "Rate-limiter state grows without bound under many client keys",
+          "likelihood": "medium",
+          "impact": "medium",
+          "mitigation": "LRU-bounded bucket map (10,000 keys)",
+          "validation": [
+            "AC-RL-3"
+          ]
+        }
+      ],
+      "slice": "RateLimit"
+    },
+    "idempotency": {
+      "title": "Idempotent link creation",
+      "kind": "feature",
+      "requires": [
+        "shorten"
+      ],
+      "order": 7,
+      "sensitive": false,
+      "keywords": [
+        "idempoten",
+        "retry",
+        "retries",
+        "duplicate (request|submission)",
+        "safe to retry",
+        "exactly[- ]once"
+      ],
+      "hooks": {
+        "provides": [],
+        "uses": [
+          "beforeRequest",
+          "afterShorten"
+        ]
+      },
+      "routes": [],
+      "requestFields": [
+        {
+          "route": "POST /api/links",
+          "field": "Idempotency-Key (header)",
+          "type": "string 1..255 (optional)"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "AC-IDEM-1",
+          "text": "Same Idempotency-Key and same body replays the original 201 response with header Idempotent-Replay: true and does not create a second link."
+        },
+        {
+          "id": "AC-IDEM-2",
+          "text": "Same Idempotency-Key with a different body returns 422 idempotency_key_reuse."
+        },
+        {
+          "id": "AC-IDEM-3",
+          "text": "Keys expire after 24 hours and the key store is bounded."
+        },
+        {
+          "id": "AC-IDEM-4",
+          "text": "An empty or over-long (>255) key returns 400."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-DUP-CREATE",
+          "scenario": "Client retries after a timeout and creates duplicate links",
+          "likelihood": "high",
+          "impact": "low",
+          "mitigation": "Idempotency-Key replay with request fingerprint check",
+          "validation": [
+            "AC-IDEM-1",
+            "AC-IDEM-2"
+          ]
+        }
+      ],
+      "slice": "Idempotency"
+    },
+    "observability": {
+      "title": "Health, readiness and metrics endpoints",
+      "kind": "feature",
+      "requires": [],
+      "order": 70,
+      "sensitive": false,
+      "keywords": [
+        "health",
+        "monitor",
+        "metrics",
+        "observab",
+        "uptime",
+        "readiness",
+        "liveness",
+        "reliab",
+        "availab"
+      ],
+      "hooks": {
+        "provides": [],
+        "uses": []
+      },
+      "routes": [
+        {
+          "method": "GET",
+          "path": "/healthz",
+          "summary": "Liveness probe",
+          "responses": {
+            "200": "OK"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/readyz",
+          "summary": "Readiness probe (store reachable)",
+          "responses": {
+            "200": "Ready",
+            "503": "Not ready"
+          }
+        },
+        {
+          "method": "GET",
+          "path": "/metrics",
+          "summary": "JSON counters",
+          "responses": {
+            "200": "OK"
+          }
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "AC-OBS-1",
+          "text": "GET /healthz returns 200 with status ok."
+        },
+        {
+          "id": "AC-OBS-2",
+          "text": "GET /readyz returns 200 when the store is reachable and 503 when it is not."
+        },
+        {
+          "id": "AC-OBS-3",
+          "text": "GET /metrics exposes request, creation and redirect counters."
+        }
+      ],
+      "risks": [
+        {
+          "id": "R-BLIND",
+          "scenario": "Failures go unnoticed without probes or counters",
+          "likelihood": "medium",
+          "impact": "medium",
+          "mitigation": "Liveness/readiness probes and JSON metrics",
+          "validation": [
+            "AC-OBS-1",
+            "AC-OBS-2",
+            "AC-OBS-3"
+          ]
+        }
+      ],
+      "slice": "Observability"
+    }
+  },
+  "nfrDefaults": {
+    "redirectLatencyP95Ms": 50,
+    "createLatencyP95Ms": 200,
+    "analyticsRetentionDays": 90,
+    "maxUrlLength": 2048,
+    "maxBodyBytes": 16384,
+    "codeLength": 7
+  },
+  "core": {
+    "dirs": [
+      "src/UrlShortener.Api/Core",
+      "tests/UrlShortener.Tests/Core",
+      "tests/UrlShortener.Tests/TestSupport"
+    ],
+    "files": [
+      "src/UrlShortener.Api/Program.cs",
+      "src/UrlShortener.Api/UrlShortener.Api.csproj",
+      "src/UrlShortener.Api/appsettings.json",
+      "tests/UrlShortener.Tests/UrlShortener.Tests.csproj"
+    ],
+    "sliceSrcDir": "src/UrlShortener.Api/Features/{Slice}",
+    "sliceTestDir": "tests/UrlShortener.Tests/Features/{Slice}",
+    "registryPath": "src/UrlShortener.Api/Features/FeatureRegistry.cs",
+    "testProject": "tests/UrlShortener.Tests/UrlShortener.Tests.csproj",
+    "hardeningTestFile": "tests/UrlShortener.Tests/Core/HardeningTests.cs"
+  }
+}

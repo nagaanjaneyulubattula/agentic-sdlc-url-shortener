@@ -1,0 +1,24 @@
+{
+  "id": "ambiguous",
+  "title": "Ambiguous: \"make it better, fast and secure\" with a mid-run change request",
+  "mode": "ambiguous",
+  "description": "A vague business request. The requirements agent refuses to guess on high-severity ambiguities and asks the human; answers are merged and the agent re-runs. Midway, the stakeholder changes the requirement (add expiry, drop rate limiting) and the engine re-plans only the invalidated part of the graph.",
+  "requirementText": "Make the link shortener better for our marketing team. It should be fast and secure, scale well, and give us some reporting on how campaigns are doing.",
+  "workspace": "empty",
+  "faults": [],
+  "events": [
+    {
+      "afterNode": "implement:redirect",
+      "description": "Marketing: campaign links must expire automatically, and rate limiting is handled by the API gateway so drop it for now",
+      "addFeatures": ["expiry"],
+      "removeFeatures": ["ratelimit"],
+      "appendText": "Change request: links created for a campaign must expire automatically; rate limiting will be provided by the API gateway."
+    }
+  ],
+  "approvals": {},
+  "answers": {
+    "AMB-PERFORMANCE": "p95 redirect latency under 50 ms",
+    "AMB-SECURITY": "rate limit link creation per client and block dangerous URLs",
+    "AMB-REPORTING": "daily click counts per link with top referrers, as a JSON API"
+  }
+}

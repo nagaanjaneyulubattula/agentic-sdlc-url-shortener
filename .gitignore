@@ -1,0 +1,9 @@
+bin/
+obj/
+runs/
+node_modules/
+.angular/
+*.user
+.vs/
+web/agentic-console/dist/
+TestResults/
